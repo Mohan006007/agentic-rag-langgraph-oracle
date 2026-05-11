@@ -1308,7 +1308,7 @@ def create_interface():
                     # CoT is enabled by default for A2A Chat
                     a2a_use_cot_state = gr.State(value=True)
                     
-                    a2a_chatbot = gr.Chatbot(height=400, label="A2A Chat", type="messages")
+                    a2a_chatbot = gr.Chatbot(height=400, label="A2A Chat")
                     with gr.Row():
                         a2a_msg = gr.Textbox(label="Your Message", scale=8, placeholder="Ask a question...")
                         a2a_clear_button = gr.Button("Clear", scale=1, variant="secondary")
@@ -1664,7 +1664,7 @@ def create_interface():
                                 swap_scenario_btn = gr.Button("🔄 Simulate Researcher Swap")
                             
                             gr.Markdown("### 3. Execution Trace")
-                            demo_log_output = gr.Chatbot(label="Task Trace", height=600, elem_id="a2a_trace_log", type="messages")
+                            demo_log_output = gr.Chatbot(label="Task Trace", height=600, elem_id="a2a_trace_log")
                             
                             # Hidden state to store current log (history)
                             demo_log_state = gr.State(value=[])

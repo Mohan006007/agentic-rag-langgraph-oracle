@@ -1,0 +1,34 @@
+[
+  {
+    "text": "This domain started out as my personal 'captive portal buster' but I wanted to publicise it for anyone to use. If you're on a train, in a hotel or bar, on a flight or anywhere that you have to login for WiFi, this site could help you!\nIf you connect to a WiFi hotspot whilst out and about, sometimes you have to login or accept Terms and Conditions. To do that the 'captive portal' has to intercept one of your requests and inject the login page for the WiFi.",
+    "metadata": {
+      "source": "http://httpforever.com/",
+      "title": "HTTP FOREVER",
+      "author": "Scotthelme Co Uk",
+      "date": null,
+      "sitename": null,
+      "categories": [],
+      "tags": [
+        "HTTP WiFi Captive Portal"
+      ],
+      "chunk_id": 0,
+      "type": "webpage"
+    }
+  },
+  {
+    "text": "This usually results in a big, red warning from your browser which you should never click through! Instead, open a new tab in your browser and come here!\nYes! Anyone is free to use or link to this site, just make sure you're always on the HTTP version: http://httpforever. com\nThis site was built by Scott Helme, a security researcher trying to help make the web more secure.",
+    "metadata": {
+      "source": "http://httpforever.com/",
+      "title": "HTTP FOREVER",
+      "author": "Scotthelme Co Uk",
+      "date": null,
+      "sitename": null,
+      "categories": [],
+      "tags": [
+        "HTTP WiFi Captive Portal"
+      ],
+      "chunk_id": 1,
+      "type": "webpage"
+    }
+  }
+]

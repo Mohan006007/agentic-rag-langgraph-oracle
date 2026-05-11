@@ -5,8 +5,6 @@ import argparse
 import logging
 import time
 import json
-import boto3
-
 try:
     from .OraDBVectorStore import OraDBVectorStore
     ORACLE_DB_AVAILABLE = True
@@ -47,43 +45,81 @@ class LocalLLM:
         
         return Response(result.strip())
 
-class BedrockModelHandler:
-    def __init__(self, model_name="meta.llama3-8b-instruct-v1:0", max_response_length=2048):
+class OllamaModelHandler:
+    """Handler for Ollama models"""
+    def __init__(self, model_name: str, max_response_length: int = 2048):
+        """Initialize Ollama model handler
+        
+        Args:
+            model_name: Name of the Ollama model to use
+            max_response_length: Maximum number of tokens to generate (default: 2048)
+        """
+        # Remove 'ollama:' prefix if present
+        if model_name and model_name.startswith("ollama:"):
+            model_name = model_name.replace("ollama:", "")
+        
         self.model_name = model_name
         self.max_response_length = max_response_length
-
-        self.client = boto3.client(
-            "bedrock-runtime",
-            region_name="us-east-1"
-        )
-
+        self._check_ollama_running()
+    
+    def _check_ollama_running(self):
+        """Check if Ollama is running and the model is available"""
+        try:
+            import ollama
+            
+            # Check if Ollama is running
+            try:
+                models = ollama.list().models
+                available_models = [model.model for model in models]
+                print(f"Available Ollama models: {', '.join(available_models)}")
+                
+                # Check if the requested model is available
+                if self.model_name not in available_models:
+                    print(f"Model '{self.model_name}' not found in Ollama. Available models: {', '.join(available_models)}")
+                    print(f"You can pull it with: ollama pull {self.model_name}")
+                    raise ValueError(f"Model '{self.model_name}' not found in Ollama")
+                else:
+                    print(f"Using Ollama model: {self.model_name}")
+            except Exception as e:
+                raise ConnectionError(f"Failed to connect to Ollama. Please make sure Ollama is running. Error: {str(e)}")
+                
+        except ImportError:
+            raise ImportError("Failed to import ollama. Please install with: pip install ollama")
+    
     def __call__(self, prompt, max_new_tokens=None, temperature=0.1, top_p=0.95, **kwargs):
-
-        if max_new_tokens is None:
-            max_new_tokens = self.max_response_length
-
-        formatted_prompt = f"""<|begin_of_text|><|start_header_id|>user<|end_header_id|>
-{prompt}
-<|eot_id|><|start_header_id|>assistant<|end_header_id|>"""
-
-        body = {
-            "prompt": formatted_prompt,
-            "max_gen_len": max_new_tokens,
-            "temperature": temperature
-        }
-
-        response = self.client.invoke_model(
-            modelId=self.model_name,
-            body=json.dumps(body)
-        )
-
-        response_body = json.loads(
-            response["body"].read()
-        )
-
-        return [{
-            "generated_text": response_body["generation"]
-        }]
+        """Generate text using the Ollama model"""
+        try:
+            import ollama
+            
+            # Use instance max_response_length if max_new_tokens not explicitly provided
+            if max_new_tokens is None:
+                max_new_tokens = self.max_response_length
+            
+            print(f"\nGenerating response with Ollama model: {self.model_name}")
+            print(f"Prompt: {prompt[:100]}...")  # Print first 100 chars of prompt
+            
+            # Generate text
+            response = ollama.generate(
+                model=self.model_name,
+                prompt=prompt,
+                options={
+                    "num_predict": max_new_tokens,
+                    "temperature": temperature,
+                    "top_p": top_p
+                }
+            )
+            
+            print(f"Response generated successfully with {self.model_name}")
+            
+            # Format result to match transformers pipeline output
+            formatted_result = [{
+                "generated_text": response["response"]
+            }]
+            
+            return formatted_result
+            
+        except Exception as e:
+            raise Exception(f"Failed to generate text with Ollama: {str(e)}")
 
 class LocalRAGAgent:
     def __init__(self, vector_store: VectorStore = None, model_name: str = None, 
@@ -93,7 +129,7 @@ class LocalRAGAgent:
         
         Args:
             vector_store: Vector store for retrieving context (if None, will create one)
-            model_name: Amazon Bedrock model ID
+            model_name: HuggingFace model name/path or Ollama model name
             use_cot: Whether to use Chain of Thought reasoning
             collection: Collection to search in (PDF, Repository, or General Knowledge)
             skip_analysis: Whether to skip query analysis (kept for backward compatibility)
@@ -105,7 +141,7 @@ class LocalRAGAgent:
         
         # Set default model if none provided
         if model_name is None:
-            model_name = "meta.llama3-8b-instruct-v1:0"
+            model_name = "gemma3:270m"
             print(f"Using default model: {model_name}")
         
         # Initialize vector store if not provided
@@ -146,39 +182,43 @@ class LocalRAGAgent:
         print('Model Name after assignment:', self.model_name)
         # skip_analysis parameter kept for backward compatibility but no longer used
         
-        # Check if this is a Bedrock model (all models now use Bedrock)
-        self.is_bedrock = True
+        # Check if this is an Ollama model (anything not Mistral is considered Ollama)
+        self.is_ollama = not (model_name and "mistral" in model_name.lower())
         
-        if self.is_bedrock:
-            # Remove 'bedrock:' prefix if present
-            if model_name and model_name.startswith("bedrock:"):
-                model_name = model_name.replace("bedrock:", "")
+        if self.is_ollama:
+            # Remove 'ollama:' prefix if present
+            if model_name and model_name.startswith("ollama:"):
+                model_name = model_name.replace("ollama:", "")
             
-            # Load Amazon Bedrock model
-            print("\nLoading Amazon Bedrock model...")
+            # Always append :latest to Ollama model names if no tag is provided
+            if ":" not in model_name:
+                model_name = f"{model_name}:latest"
+            
+            # Load Ollama model
+            print("\nLoading Ollama model...")
             print(f"Model: {model_name}")
-            print("Note: Make sure AWS credentials are configured for Bedrock access.")
+            print("Note: Make sure Ollama is running on your system.")
             
-            # Initialize Bedrock model handler
-            self.bedrock_handler = BedrockModelHandler(model_name, max_response_length=self.max_response_length)
+            # Initialize Ollama model handler
+            self.ollama_handler = OllamaModelHandler(model_name, max_response_length=self.max_response_length)
             
             # Create pipeline-like interface
-            self.pipeline = self.bedrock_handler
-            print(f"Using Amazon Bedrock model: {model_name}")
+            self.pipeline = self.ollama_handler
+            print(f"Using Ollama model: {model_name}")
         else:
-            # Fallback for unexpected non-Bedrock models
+            # Fallback for unexpected non-Ollama models (though we aim to only use Ollama now)
              if not model_name:
-                print("\nNo model specified. Defaulting to Amazon Bedrock model.")
-                model_name = "meta.llama3-8b-instruct-v1:0"
-                self.bedrock_handler = BedrockModelHandler(model_name, max_response_length=self.max_response_length)
-                self.pipeline = self.bedrock_handler
-                print(f"Using default Amazon Bedrock model: {model_name}")
+                print("\nNo model specified. Defaulting to Ollama model.")
+                model_name = "gemma3:270m"
+                self.ollama_handler = OllamaModelHandler(model_name, max_response_length=self.max_response_length)
+                self.pipeline = self.ollama_handler
+                print(f"Using default Ollama model: {model_name}")
              else:
-                # If a specific model ID is provided, use it with Bedrock
-                print(f"\nWarning: Unexpected model requested: {model_name}. Attempting to use as Bedrock model ID.")
-                self.bedrock_handler = BedrockModelHandler(model_name, max_response_length=self.max_response_length)
-                self.pipeline = self.bedrock_handler
-                print(f"Using specified model as Amazon Bedrock model: {model_name}")
+                # If a specific local model path is provided (not recommended per new directive, but keeping safe fallback stub)
+                print(f"\nWarning: Non-Ollama model requested: {model_name}. Attempting to use as Ollama model name.")
+                self.ollama_handler = OllamaModelHandler(model_name, max_response_length=self.max_response_length)
+                self.pipeline = self.ollama_handler
+                print(f"Using specified model as Ollama model: {model_name}")
         
         # Create LLM wrapper with max_response_length
         self.llm = LocalLLM(self.pipeline, max_response_length=self.max_response_length)
@@ -520,7 +560,7 @@ def main():
     parser = argparse.ArgumentParser(description="Query documents using local LLM")
     parser.add_argument("--query", required=True, help="Query to search for")
     parser.add_argument("--embeddings", default="oracle", choices=["oracle", "chromadb"], help="Embeddings backend to use")
-    parser.add_argument("--model", default="meta.llama3-8b-instruct-v1:0", help="Amazon Bedrock model ID (default: meta.llama3-8b-instruct-v1:0)")
+    parser.add_argument("--model", default="gemma3:270m", help="Model to use (default: gemma3:270m)")
     parser.add_argument("--collection", help="Collection to search (PDF, Repository, General Knowledge)")
     parser.add_argument("--use-cot", action="store_true", help="Use Chain of Thought reasoning")
     parser.add_argument("--store-path", default="embeddings", help="Path to ChromaDB store")

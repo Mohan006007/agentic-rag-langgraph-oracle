@@ -276,14 +276,9 @@ def main_menu():
 
 if __name__ == "__main__":
     try:
-        console.print("[bold cyan]Checking AI Model availability...[/bold cyan]")
-        if not ensure_model_loaded(get_db_connection()):
-            console.print(
-                "[bold red]Failed to ensure AI model is loaded. Some features may not work.[/bold red]"
-            )
-            input("Press Enter to continue anyway...")
-
+        console.print("[yellow]Skipping Oracle DB model check...[/yellow]")
         main_menu()
+
     except KeyboardInterrupt:
         console.print("\n[bold red]Interrupted by user. Exiting...[/bold red]")
         sys.exit(0)
